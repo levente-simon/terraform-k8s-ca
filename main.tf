@@ -9,7 +9,9 @@ provider "kubernetes" {
 }
 
 provider "vault" {
-  address      = var.vault_address
+  alias   = "ca"
+  address = var.vault_address
+  token   = var.vault_token
 }
 
 variable "module_depends_on" {
@@ -19,6 +21,7 @@ variable "module_depends_on" {
 
 resource "vault_mount" "ca" {
   depends_on = [ var.module_depends_on ]
+  provider    = vault.ca
   path        = "ca"
   type        = "pki"
   description = "CA server"
@@ -29,18 +32,21 @@ resource "vault_mount" "ca" {
 
 resource "vault_pki_secret_backend_config_ca" "ca" {
   depends_on = [vault_mount.ca]
+  provider   = vault.ca
   backend    = vault_mount.ca.path
   pem_bundle = var.vault_ca_pem_bundle
 }
 
 resource "vault_pki_secret_backend_config_urls" "ca" {
   depends_on           = [vault_mount.ca]
+  provider             = vault.ca
   backend              = vault_mount.ca.path
   issuing_certificates = [ "${var.vault_address}/v1/pki/ca" ]
 }
 
 resource "vault_pki_secret_backend_role" "ca" {
   depends_on         = [ vault_mount.ca ]
+  provider           = vault.ca
   backend            = vault_mount.ca.path
   name               = "ca"
 
@@ -67,6 +73,7 @@ resource "vault_pki_secret_backend_role" "ca" {
 
 resource "vault_policy" "ca" {
   depends_on         = [ vault_mount.ca ]
+  provider           = vault.ca
   name               = "ca"
 
   policy = <<EOT
@@ -113,11 +120,13 @@ data "kubernetes_secret" "sec_vault_auth" {
 
 resource "vault_auth_backend" "kubernetes_auth_be_pki" {
   depends_on = [ vault_pki_secret_backend_role.ca ]
+  provider   = vault.ca
   type       = "kubernetes"
 }
 
 resource "vault_kubernetes_auth_backend_config" "kube_auth_be_conf_pki" {
   backend                = vault_auth_backend.kubernetes_auth_be_pki.path
+  provider               = vault.ca
 
   kubernetes_host        = "https://kubernetes.default.svc.cluster.local:443"
   token_reviewer_jwt     = data.kubernetes_secret.sec_vault_auth.data.token
@@ -127,6 +136,7 @@ resource "vault_kubernetes_auth_backend_config" "kube_auth_be_conf_pki" {
 
 resource "vault_kubernetes_auth_backend_role" "ca" {
   backend                          = vault_auth_backend.kubernetes_auth_be_pki.path
+  provider                         = vault.ca
   role_name                        = "ca"
   bound_service_account_names      = [ "vault-auth"  ]
   bound_service_account_namespaces = [ var.cert_manager_namespace ]

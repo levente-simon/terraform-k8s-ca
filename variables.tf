@@ -3,6 +3,11 @@ variable "vault_address"              { type = string       }
 variable "vault_ca_pem_bundle"        { type = string       }
 variable "vault_allowed_domains"      { type = list(string) }
 
+variable "vault_token" {
+  type      = string
+  sensitive = true
+}
+
 variable "k8s_host" {
   type      = string
   sensitive = true
